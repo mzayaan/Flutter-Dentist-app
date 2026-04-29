@@ -233,17 +233,3 @@ flutter run
 > These credentials are seeded by the SQL script. Change them in Supabase after first login.
 
 ---
-
-## 8. Screenshots
-
-> *(Add screenshots here)*
-
----
-
-## 9. Assignment Info
-
-| Field | Detail |
-|---|---|
-| Module | Mobile Application Development |
-| Framework | Flutter + Supabase |
-| Submission Deadline | 04 August 2026 |
