@@ -205,7 +205,7 @@ flutter pub get
 
 **3. Configure Supabase**
 
-Open `lib/config/supabase_config.dart` and replace the placeholder values:
+Create and open `lib/config/supabase_config.dart` and replace the placeholder values:
 ```dart
 const String supabaseUrl = 'YOUR_SUPABASE_URL';
 const String supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY';
