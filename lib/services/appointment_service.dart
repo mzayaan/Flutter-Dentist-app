@@ -45,6 +45,18 @@ class AppointmentService {
     return response != null;
   }
 
+  Future<List<String>> getBookedSlots(String dentistId, String date) async {
+    final response = await _supabase
+        .from('appointments')
+        .select('appointment_time')
+        .eq('dentist_id', dentistId)
+        .eq('appointment_date', date)
+        .neq('status', 'Cancelled');
+    return (response as List)
+        .map((a) => a['appointment_time'].toString())
+        .toList();
+  }
+
   Future<Appointment> bookAppointment({
     required String patientId,
     required String dentistId,

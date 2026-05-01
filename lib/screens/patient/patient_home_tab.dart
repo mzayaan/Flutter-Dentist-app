@@ -3,7 +3,13 @@ import 'package:intl/intl.dart';
 import '../../models/appointment.dart';
 import '../../models/patient.dart';
 import '../../services/appointment_service.dart';
+import '../../utils/tab_refresher.dart';
 import '../../widgets/status_badge.dart';
+
+String _drName(String? name) {
+  final n = name ?? 'Unknown';
+  return n.startsWith('Dr.') ? n : 'Dr. $n';
+}
 
 class PatientHomeTab extends StatefulWidget {
   final Patient patient;
@@ -14,10 +20,17 @@ class PatientHomeTab extends StatefulWidget {
   State<PatientHomeTab> createState() => _PatientHomeTabState();
 }
 
-class _PatientHomeTabState extends State<PatientHomeTab> {
+class _PatientHomeTabState extends State<PatientHomeTab>
+    with AutomaticKeepAliveClientMixin, TabRefresher {
   final _appointmentService = AppointmentService();
   List<Appointment> _upcoming = [];
   bool _loading = true;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void refresh() => _loadData();
 
   @override
   void initState() {
@@ -53,6 +66,7 @@ class _PatientHomeTabState extends State<PatientHomeTab> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return RefreshIndicator(
       onRefresh: _loadData,
       color: const Color(0xFF1565C0),
@@ -79,7 +93,7 @@ class _PatientHomeTabState extends State<PatientHomeTab> {
                   Row(
                     children: [
                       CircleAvatar(
-                        backgroundColor: Colors.white.withValues(alpha:0.25),
+                        backgroundColor: Colors.white.withValues(alpha: 0.25),
                         radius: 24,
                         child: Text(
                           widget.patient.fullName.isNotEmpty
@@ -99,7 +113,7 @@ class _PatientHomeTabState extends State<PatientHomeTab> {
                             Text(
                               'Welcome back,',
                               style: TextStyle(
-                                color: Colors.white.withValues(alpha:0.85),
+                                color: Colors.white.withValues(alpha: 0.85),
                                 fontSize: 13,
                               ),
                             ),
@@ -123,7 +137,7 @@ class _PatientHomeTabState extends State<PatientHomeTab> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha:0.2),
+                      color: Colors.white.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -222,7 +236,7 @@ class _AppointmentCard extends StatelessWidget {
                     size: 14, color: Color(0xFF1565C0)),
                 const SizedBox(width: 4),
                 Text(
-                  'Dr. ${appointment.dentistName ?? "Unknown"}',
+                  _drName(appointment.dentistName),
                   style: const TextStyle(
                       color: Color(0xFF1565C0),
                       fontSize: 13,

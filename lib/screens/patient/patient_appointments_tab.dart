@@ -1,9 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/appointment.dart';
 import '../../models/patient.dart';
 import '../../services/appointment_service.dart';
+import '../../services/bill_service.dart';
+import '../../utils/tab_refresher.dart';
 import '../../widgets/status_badge.dart';
+
+String _drName(String? name) {
+  final n = name ?? 'Unknown';
+  return n.startsWith('Dr.') ? n : 'Dr. $n';
+}
 
 class PatientAppointmentsTab extends StatefulWidget {
   final Patient patient;
@@ -15,41 +23,65 @@ class PatientAppointmentsTab extends StatefulWidget {
       _PatientAppointmentsTabState();
 }
 
-class _PatientAppointmentsTabState
-    extends State<PatientAppointmentsTab>
-    with SingleTickerProviderStateMixin {
+class _PatientAppointmentsTabState extends State<PatientAppointmentsTab>
+    with
+        SingleTickerProviderStateMixin,
+        AutomaticKeepAliveClientMixin,
+        TabRefresher {
+  final _supabase = Supabase.instance.client;
   final _appointmentService = AppointmentService();
+  final _billService = BillService();
   List<Appointment> _upcoming = [];
   List<Appointment> _past = [];
   bool _loading = true;
+  bool _refreshing = false;
   late TabController _tabController;
+  late RealtimeChannel _channel;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void refresh() => _loadAppointments();
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _loadAppointments();
+    _channel = _supabase
+        .channel('patient_appts_rt_${widget.patient.id}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'appointments',
+          callback: (payload) {
+            if (mounted && !_refreshing) _loadAppointments();
+          },
+        )
+        .subscribe();
   }
 
   @override
   void dispose() {
+    _supabase.removeChannel(_channel);
     _tabController.dispose();
     super.dispose();
   }
 
   Future<void> _loadAppointments() async {
-    setState(() => _loading = true);
+    if (!mounted) return;
+    if (!_loading) setState(() => _refreshing = true);
     try {
-      final all = await _appointmentService
-          .getPatientAppointments(widget.patient.id);
+      final all =
+          await _appointmentService.getPatientAppointments(widget.patient.id);
       final now = DateTime.now();
       final today = DateTime(now.year, now.month, now.day);
       if (!mounted) return;
       setState(() {
         _upcoming = all
             .where((a) =>
-                !a.appointmentDate.isBefore(today) &&
-                a.status != 'Cancelled')
+                !a.appointmentDate.isBefore(today) && a.status != 'Cancelled')
             .toList();
         _past = all
             .where((a) =>
@@ -58,10 +90,14 @@ class _PatientAppointmentsTabState
                 a.status == 'Completed')
             .toList();
         _loading = false;
+        _refreshing = false;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _refreshing = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
       );
@@ -74,7 +110,8 @@ class _PatientAppointmentsTabState
       builder: (ctx) => AlertDialog(
         title: const Text('Cancel Appointment'),
         content: Text(
-          'Cancel appointment on ${DateFormat('dd MMM yyyy').format(appt.appointmentDate)}?',
+          'Cancel appointment on ${DateFormat('dd MMM yyyy').format(appt.appointmentDate)}?\n\n'
+          'The associated bill will also be removed.',
         ),
         actions: [
           TextButton(
@@ -95,11 +132,12 @@ class _PatientAppointmentsTabState
     if (confirm != true) return;
     try {
       await _appointmentService.updateStatus(appt.id, 'Cancelled');
+      await _billService.deleteByAppointment(appt.id);
       _loadAppointments();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Appointment cancelled.'),
+          content: Text('Appointment cancelled and bill removed.'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -113,8 +151,14 @@ class _PatientAppointmentsTabState
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Column(
       children: [
+        if (_refreshing)
+          const LinearProgressIndicator(
+            color: Color(0xFF1565C0),
+            backgroundColor: Colors.transparent,
+          ),
         Container(
           color: const Color(0xFF1565C0),
           child: TabBar(
@@ -133,8 +177,7 @@ class _PatientAppointmentsTabState
         Expanded(
           child: _loading
               ? const Center(
-                  child: CircularProgressIndicator(
-                      color: Color(0xFF1565C0)))
+                  child: CircularProgressIndicator(color: Color(0xFF1565C0)))
               : TabBarView(
                   controller: _tabController,
                   children: [
@@ -199,7 +242,7 @@ class _PatientAppointmentsTabState
                     const Icon(Icons.person_outline,
                         size: 14, color: Color(0xFF1565C0)),
                     const SizedBox(width: 4),
-                    Text('Dr. ${a.dentistName ?? "Unknown"}',
+                    Text(_drName(a.dentistName),
                         style: const TextStyle(
                             color: Color(0xFF1565C0),
                             fontSize: 13,
@@ -211,8 +254,7 @@ class _PatientAppointmentsTabState
                         size: 14, color: Colors.grey[600]),
                     const SizedBox(width: 4),
                     Text(
-                      DateFormat('EEE, dd MMM yyyy')
-                          .format(a.appointmentDate),
+                      DateFormat('EEE, dd MMM yyyy').format(a.appointmentDate),
                       style: TextStyle(color: Colors.grey[600], fontSize: 13),
                     ),
                     const SizedBox(width: 12),
@@ -220,18 +262,18 @@ class _PatientAppointmentsTabState
                         size: 14, color: Colors.grey[600]),
                     const SizedBox(width: 4),
                     Text(a.appointmentTime,
-                        style: TextStyle(
-                            color: Colors.grey[600], fontSize: 13)),
+                        style:
+                            TextStyle(color: Colors.grey[600], fontSize: 13)),
                   ]),
                   if (a.treatmentPrice != null) ...[
                     const SizedBox(height: 4),
                     Row(children: [
-                      Icon(Icons.attach_money_rounded,
+                      Icon(Icons.currency_rupee_rounded,
                           size: 14, color: Colors.grey[600]),
                       Text(
-                        '\$${a.treatmentPrice!.toStringAsFixed(2)}',
-                        style: TextStyle(
-                            color: Colors.grey[600], fontSize: 13),
+                        'Rs ${a.treatmentPrice!.toStringAsFixed(2)}',
+                        style:
+                            TextStyle(color: Colors.grey[600], fontSize: 13),
                       ),
                     ]),
                   ],

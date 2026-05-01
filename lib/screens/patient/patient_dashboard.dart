@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/patient.dart';
 import '../../screens/auth/splash_screen.dart';
+import '../../utils/tab_refresher.dart';
 import 'patient_home_tab.dart';
 import 'patient_book_tab.dart';
 import 'patient_appointments_tab.dart';
@@ -19,7 +20,9 @@ class PatientDashboard extends StatefulWidget {
 class _PatientDashboardState extends State<PatientDashboard> {
   int _currentIndex = 0;
 
+  late final List<GlobalKey> _pageKeys;
   late final List<Widget> _tabs;
+
   final List<String> _titles = const [
     'SmileCare',
     'Book Appointment',
@@ -31,13 +34,26 @@ class _PatientDashboardState extends State<PatientDashboard> {
   @override
   void initState() {
     super.initState();
+    _pageKeys = List.generate(5, (_) => GlobalKey());
     _tabs = [
-      PatientHomeTab(patient: widget.patient),
-      PatientBookTab(patient: widget.patient),
-      PatientAppointmentsTab(patient: widget.patient),
-      PatientBillsTab(patient: widget.patient),
-      PatientProfileTab(patient: widget.patient),
+      PatientHomeTab(key: _pageKeys[0], patient: widget.patient),
+      PatientBookTab(
+        key: _pageKeys[1],
+        patient: widget.patient,
+        onBookingComplete: _onBookingComplete,
+      ),
+      PatientAppointmentsTab(key: _pageKeys[2], patient: widget.patient),
+      PatientBillsTab(key: _pageKeys[3], patient: widget.patient),
+      PatientProfileTab(key: _pageKeys[4], patient: widget.patient),
     ];
+  }
+
+  void _onBookingComplete() {
+    setState(() => _currentIndex = 0);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final state = _pageKeys[0].currentState;
+      if (state is TabRefresher) (state as TabRefresher).refresh();
+    });
   }
 
   void _logout() {
@@ -94,7 +110,11 @@ class _PatientDashboardState extends State<PatientDashboard> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
+        onTap: (index) {
+          setState(() => _currentIndex = index);
+          final state = _pageKeys[index].currentState;
+          if (state is TabRefresher) (state as TabRefresher).refresh();
+        },
         type: BottomNavigationBarType.fixed,
         selectedItemColor: const Color(0xFF1565C0),
         unselectedItemColor: Colors.grey[500],

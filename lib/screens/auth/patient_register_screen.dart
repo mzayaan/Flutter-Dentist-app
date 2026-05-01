@@ -152,10 +152,22 @@ class _PatientRegisterScreenState extends State<PatientRegisterScreen> {
                   TextFormField(
                     controller: _phoneCtrl,
                     keyboardType: TextInputType.phone,
-                    decoration:
-                        _inputDecoration('Phone Number', Icons.phone_outlined),
-                    validator: (v) =>
-                        v == null || v.isEmpty ? 'Enter phone number' : null,
+                    decoration: _inputDecoration(
+                      'Phone Number',
+                      Icons.phone_outlined,
+                      hint: '+230 5XXX XXXX',
+                    ),
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) {
+                        return 'Enter phone number';
+                      }
+                      final t = v.trim();
+                      if (t.startsWith('+230')) return null;
+                      if (t.length == 8 && int.tryParse(t) != null) {
+                        return null;
+                      }
+                      return 'Use +230 XXXX XXXX or 8-digit number';
+                    },
                   ),
                   const SizedBox(height: 14),
                   GestureDetector(
@@ -256,9 +268,10 @@ class _PatientRegisterScreenState extends State<PatientRegisterScreen> {
   }
 
   InputDecoration _inputDecoration(String label, IconData icon,
-      {Widget? suffix}) {
+      {Widget? suffix, String? hint}) {
     return InputDecoration(
       labelText: label,
+      hintText: hint,
       prefixIcon: Icon(icon, color: const Color(0xFF1565C0)),
       suffixIcon: suffix,
       filled: true,

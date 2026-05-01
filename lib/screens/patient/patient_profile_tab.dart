@@ -2,13 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/patient.dart';
 
-class PatientProfileTab extends StatelessWidget {
+class PatientProfileTab extends StatefulWidget {
   final Patient patient;
 
   const PatientProfileTab({super.key, required this.patient});
 
   @override
+  State<PatientProfileTab> createState() => _PatientProfileTabState();
+}
+
+class _PatientProfileTabState extends State<PatientProfileTab>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
   Widget build(BuildContext context) {
+    super.build(context);
+    final patient = widget.patient;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -16,7 +27,7 @@ class PatientProfileTab extends StatelessWidget {
           const SizedBox(height: 16),
           CircleAvatar(
             radius: 50,
-            backgroundColor: const Color(0xFF1565C0).withValues(alpha:0.12),
+            backgroundColor: const Color(0xFF1565C0).withValues(alpha: 0.12),
             child: Text(
               patient.fullName.isNotEmpty
                   ? patient.fullName[0].toUpperCase()
@@ -52,7 +63,7 @@ class PatientProfileTab extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha:0.06),
+                  color: Colors.black.withValues(alpha: 0.06),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -103,10 +114,10 @@ class PatientProfileTab extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF1565C0).withValues(alpha:0.05),
+              color: const Color(0xFF1565C0).withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                  color: const Color(0xFF1565C0).withValues(alpha:0.2)),
+                  color: const Color(0xFF1565C0).withValues(alpha: 0.2)),
             ),
             child: Row(
               children: [
@@ -165,7 +176,7 @@ class _ProfileTile extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: const Color(0xFF1565C0).withValues(alpha:0.08),
+              color: const Color(0xFF1565C0).withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(icon, color: const Color(0xFF1565C0), size: 20),

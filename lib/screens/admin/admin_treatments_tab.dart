@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../models/treatment.dart';
 import '../../services/treatment_service.dart';
+import '../../utils/tab_refresher.dart';
 
 class AdminTreatmentsTab extends StatefulWidget {
   const AdminTreatmentsTab({super.key});
@@ -9,29 +11,62 @@ class AdminTreatmentsTab extends StatefulWidget {
   State<AdminTreatmentsTab> createState() => _AdminTreatmentsTabState();
 }
 
-class _AdminTreatmentsTabState extends State<AdminTreatmentsTab> {
+class _AdminTreatmentsTabState extends State<AdminTreatmentsTab>
+    with AutomaticKeepAliveClientMixin, TabRefresher {
+  final _supabase = Supabase.instance.client;
   final _treatmentService = TreatmentService();
   List<Treatment> _treatments = [];
   bool _loading = true;
+  bool _refreshing = false;
+
+  late RealtimeChannel _channel;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void refresh() => _loadTreatments();
 
   @override
   void initState() {
     super.initState();
     _loadTreatments();
+    _channel = _supabase
+        .channel('admin_treatments_rt')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'treatments',
+          callback: (payload) {
+            if (mounted && !_refreshing) _loadTreatments();
+          },
+        )
+        .subscribe();
+  }
+
+  @override
+  void dispose() {
+    _supabase.removeChannel(_channel);
+    super.dispose();
   }
 
   Future<void> _loadTreatments() async {
-    setState(() => _loading = true);
+    if (!mounted) return;
+    if (!_loading) setState(() => _refreshing = true);
     try {
       final list = await _treatmentService.getAllTreatments();
       if (!mounted) return;
       setState(() {
         _treatments = list;
         _loading = false;
+        _refreshing = false;
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _refreshing = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
       );
@@ -39,8 +74,7 @@ class _AdminTreatmentsTabState extends State<AdminTreatmentsTab> {
   }
 
   Future<void> _showTreatmentDialog({Treatment? treatment}) async {
-    final nameCtrl =
-        TextEditingController(text: treatment?.name ?? '');
+    final nameCtrl = TextEditingController(text: treatment?.name ?? '');
     final descCtrl =
         TextEditingController(text: treatment?.description ?? '');
     final priceCtrl = TextEditingController(
@@ -68,8 +102,8 @@ class _AdminTreatmentsTabState extends State<AdminTreatmentsTab> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _dialogField(
-                      nameCtrl, 'Treatment Name', Icons.medical_services_outlined),
+                  _dialogField(nameCtrl, 'Treatment Name',
+                      Icons.medical_services_outlined),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: descCtrl,
@@ -100,8 +134,8 @@ class _AdminTreatmentsTabState extends State<AdminTreatmentsTab> {
                   const SizedBox(height: 12),
                   _dialogField(
                     priceCtrl,
-                    'Price (\$)',
-                    Icons.attach_money_rounded,
+                    'Price (Rs)',
+                    Icons.currency_rupee_rounded,
                     keyboardType: const TextInputType.numberWithOptions(
                         decimal: true),
                     validator: (v) {
@@ -240,120 +274,137 @@ class _AdminTreatmentsTabState extends State<AdminTreatmentsTab> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Scaffold(
       backgroundColor: Colors.grey[50],
-      body: _loading
-          ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFF1565C0)))
-          : _treatments.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.medical_services_outlined,
-                          size: 64, color: Colors.grey[400]),
-                      const SizedBox(height: 16),
-                      Text('No treatments found',
-                          style: TextStyle(
-                              color: Colors.grey[600], fontSize: 16)),
-                    ],
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _loadTreatments,
-                  color: const Color(0xFF1565C0),
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _treatments.length,
-                    itemBuilder: (context, index) {
-                      final t = _treatments[index];
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        elevation: 2,
-                        shadowColor: Colors.black12,
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
-                          leading: Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: Colors.teal.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: const Icon(Icons.medical_services_rounded,
-                                color: Colors.teal, size: 24),
-                          ),
-                          title: Text(
-                            t.name,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 15),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 2),
-                              Text(
-                                t.description,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+      body: Column(
+        children: [
+          if (_refreshing)
+            const LinearProgressIndicator(
+              color: Color(0xFF1565C0),
+              backgroundColor: Colors.transparent,
+            ),
+          Expanded(
+            child: _loading
+                ? const Center(
+                    child:
+                        CircularProgressIndicator(color: Color(0xFF1565C0)))
+                : _treatments.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.medical_services_outlined,
+                                size: 64, color: Colors.grey[400]),
+                            const SizedBox(height: 16),
+                            Text('No treatments found',
                                 style: TextStyle(
-                                    color: Colors.grey[600], fontSize: 12),
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.green.withValues(alpha: 0.12),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      '\$${t.price.toStringAsFixed(2)}',
-                                      style: const TextStyle(
-                                          color: Colors.green,
-                                          fontWeight: FontWeight.bold,
+                                    color: Colors.grey[600], fontSize: 16)),
+                          ],
+                        ),
+                      )
+                    : RefreshIndicator(
+                        onRefresh: _loadTreatments,
+                        color: const Color(0xFF1565C0),
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: _treatments.length,
+                          itemBuilder: (context, index) {
+                            final t = _treatments[index];
+                            return Card(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                              elevation: 2,
+                              shadowColor: Colors.black12,
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 8),
+                                leading: Container(
+                                  width: 48,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    color: Colors.teal.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(
+                                      Icons.medical_services_rounded,
+                                      color: Colors.teal,
+                                      size: 24),
+                                ),
+                                title: Text(t.name,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15)),
+                                subtitle: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      t.description,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                          color: Colors.grey[600],
                                           fontSize: 12),
                                     ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '${t.durationMins} mins',
-                                    style: TextStyle(
-                                        color: Colors.grey[500],
-                                        fontSize: 12),
-                                  ),
-                                ],
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.green
+                                                .withValues(alpha: 0.12),
+                                            borderRadius:
+                                                BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            'Rs ${t.price.toStringAsFixed(2)}',
+                                            style: const TextStyle(
+                                                color: Colors.green,
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 12),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          '${t.durationMins} mins',
+                                          style: TextStyle(
+                                              color: Colors.grey[500],
+                                              fontSize: 12),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.edit_rounded,
+                                          color: Color(0xFF1565C0)),
+                                      onPressed: () =>
+                                          _showTreatmentDialog(treatment: t),
+                                      tooltip: 'Edit',
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_rounded,
+                                          color: Colors.red),
+                                      onPressed: () => _deleteTreatment(t),
+                                      tooltip: 'Delete',
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ],
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.edit_rounded,
-                                    color: Color(0xFF1565C0)),
-                                onPressed: () =>
-                                    _showTreatmentDialog(treatment: t),
-                                tooltip: 'Edit',
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.delete_rounded,
-                                    color: Colors.red),
-                                onPressed: () => _deleteTreatment(t),
-                                tooltip: 'Delete',
-                              ),
-                            ],
-                          ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
-                ),
+                      ),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _showTreatmentDialog(),
         backgroundColor: const Color(0xFF1565C0),

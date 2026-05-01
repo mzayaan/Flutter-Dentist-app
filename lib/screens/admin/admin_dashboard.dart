@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/admin.dart';
 import '../../screens/auth/splash_screen.dart';
+import '../../utils/tab_refresher.dart';
 import 'admin_home_tab.dart';
 import 'admin_dentists_tab.dart';
 import 'admin_treatments_tab.dart';
@@ -19,13 +20,8 @@ class AdminDashboard extends StatefulWidget {
 class _AdminDashboardState extends State<AdminDashboard> {
   int _currentIndex = 0;
 
-  final List<Widget> _tabs = const [
-    AdminHomeTab(),
-    AdminDentistsTab(),
-    AdminTreatmentsTab(),
-    AdminAppointmentsTab(),
-    AdminBillsTab(),
-  ];
+  late final List<GlobalKey> _pageKeys;
+  late final List<Widget> _tabs;
 
   final List<String> _titles = const [
     'Dashboard',
@@ -34,6 +30,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
     'Appointments',
     'Bills',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _pageKeys = List.generate(5, (_) => GlobalKey());
+    _tabs = [
+      AdminHomeTab(key: _pageKeys[0]),
+      AdminDentistsTab(key: _pageKeys[1]),
+      AdminTreatmentsTab(key: _pageKeys[2]),
+      AdminAppointmentsTab(key: _pageKeys[3]),
+      AdminBillsTab(key: _pageKeys[4]),
+    ];
+  }
 
   void _logout() {
     showDialog(
@@ -89,7 +98,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
+        onTap: (index) {
+          setState(() => _currentIndex = index);
+          final state = _pageKeys[index].currentState;
+          if (state is TabRefresher) (state as TabRefresher).refresh();
+        },
         type: BottomNavigationBarType.fixed,
         selectedItemColor: const Color(0xFF1565C0),
         unselectedItemColor: Colors.grey[500],

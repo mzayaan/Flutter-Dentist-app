@@ -57,4 +57,29 @@ class DentistService {
   Future<void> deleteDentist(String id) async {
     await _supabase.from('dentists').delete().eq('id', id);
   }
+
+  Future<Set<String>> getDentistTreatmentIds(String dentistId) async {
+    final response = await _supabase
+        .from('dentist_treatments')
+        .select('treatment_id')
+        .eq('dentist_id', dentistId);
+    return (response as List)
+        .map((e) => e['treatment_id'] as String)
+        .toSet();
+  }
+
+  Future<void> setDentistTreatments(
+      String dentistId, List<String> treatmentIds) async {
+    await _supabase
+        .from('dentist_treatments')
+        .delete()
+        .eq('dentist_id', dentistId);
+    if (treatmentIds.isNotEmpty) {
+      await _supabase.from('dentist_treatments').insert(
+        treatmentIds
+            .map((tid) => {'dentist_id': dentistId, 'treatment_id': tid})
+            .toList(),
+      );
+    }
+  }
 }

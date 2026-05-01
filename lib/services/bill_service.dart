@@ -53,6 +53,13 @@ class BillService {
         .eq('appointment_id', appointmentId);
   }
 
+  Future<void> deleteByAppointment(String appointmentId) async {
+    await _supabase
+        .from('bills')
+        .delete()
+        .eq('appointment_id', appointmentId);
+  }
+
   Future<double> getTotalRevenue() async {
     final response = await _supabase
         .from('bills')
